@@ -14,6 +14,6 @@ env:
   - name: "SERVING_ENDPOINT_EMBEDDING"
     value: "databricks-bge-large-en"
   - name: "POOL_MIN_SIZE"
-    value: "2"
+    value: "10"
   - name: "POOL_MAX_SIZE"
     value: "25"
