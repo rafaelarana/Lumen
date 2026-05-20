@@ -22,8 +22,8 @@ terraform/*.tfplan
 
 # rust loadtest
 loadtest/target/
-loadtest/report.html
-loadtest/requests.jsonl
+loadtest/report*.html
+loadtest/requests*.jsonl
 
 # logs
 /tmp/lumen-*.log

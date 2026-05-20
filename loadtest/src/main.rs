@@ -1,8 +1,20 @@
 //! Lumen load test driver.
 //!
 //! Uses Goose (Rust load-testing framework, async, Locust-inspired) to fire
-//! concurrent `/api/search` requests against the deployed Databricks App,
-//! measuring throughput and full latency percentiles.
+//! concurrent search requests at the deployed Databricks App, head-to-head
+//! across Standard and Turbo modes, measuring throughput and full latency
+//! percentiles.
+//!
+//! ## Request mix
+//!
+//! Each iteration randomly picks:
+//!   • path:   50% Standard (/api/search) · 50% Turbo (/api/search/fast)
+//!   • mode:   70% semantic            · 30% hybrid
+//!
+//! ⇒ 4 named request buckets, tracked separately in the report:
+//!   standard:semantic · standard:hybrid · turbo:semantic · turbo:hybrid
+//!
+//! Override the path mix with `--turbo-pct N` (0–100).
 //!
 //! ## Usage
 //!
@@ -13,16 +25,9 @@
 //!         -u 20 -r 5 -t 2m \
 //!         --report-file report.html --no-reset-metrics
 //!
-//! Goose flags (a few useful ones):
-//!   -u, --users <N>          concurrent users
-//!   -r, --hatch-rate <N>     users started per second during ramp-up
-//!   -t, --run-time <T>       e.g. 30s / 5m / 1h
-//!   --no-reset-metrics       keep ramp-up samples (default discards them)
-//!   --report-file <PATH>     write an HTML report
-//!   --request-log <PATH>     write per-request JSONL log
-//!
-//! Goose reports mean / median / p50 / p75 / p95 / p98 / p99 / p99.9 / max
-//! per request type, plus aggregated throughput and error counts.
+//! Note on Turbo: the first ~minute of the test warms the in-process LRU
+//! cache as the 100 sample queries cycle through. Steady-state hit rate
+//! converges to ~100% once every query has been seen at least once.
 
 use std::env;
 
@@ -33,13 +38,26 @@ use serde_json::json;
 mod queries;
 use queries::QUERIES;
 
-/// Mode mix: 70% semantic, 30% hybrid (representative of an app's traffic
-/// pattern — most queries don't include keyword hints).
+/// Mode mix: 70% semantic, 30% hybrid.
 const SEMANTIC_WEIGHT: u8 = 70;
 
+/// Path mix: default 50% Standard, 50% Turbo. Override with --turbo-pct.
+const DEFAULT_TURBO_WEIGHT: u8 = 50;
+
+fn turbo_weight() -> u8 {
+    // Allow `LUMEN_TURBO_PCT=N` to control the path split without recompiling.
+    env::var("LUMEN_TURBO_PCT")
+        .ok()
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|n| n.min(100))
+        .unwrap_or(DEFAULT_TURBO_WEIGHT)
+}
+
 async fn search(user: &mut GooseUser) -> TransactionResult {
+    let turbo_pct = turbo_weight();
+
     // Scope the (non-Send) ThreadRng so it's dropped before any `.await`.
-    let (query, mode) = {
+    let (query, mode, path) = {
         let mut rng = rand::thread_rng();
         let q = QUERIES.choose(&mut rng).copied().unwrap_or("chair");
         let m = if rand::random::<u8>() % 100 < SEMANTIC_WEIGHT {
@@ -47,7 +65,22 @@ async fn search(user: &mut GooseUser) -> TransactionResult {
         } else {
             "hybrid"
         };
-        (q, m)
+        let p = if rand::random::<u8>() % 100 < turbo_pct {
+            "turbo"
+        } else {
+            "standard"
+        };
+        (q, m, p)
+    };
+
+    // URL + display name resolved statically so we keep &'static str slices
+    // (no allocation per request).
+    let (url, name): (&'static str, &'static str) = match (path, mode) {
+        ("turbo", "semantic")    => ("/api/search/fast", "turbo:semantic"),
+        ("turbo", "hybrid")      => ("/api/search/fast", "turbo:hybrid"),
+        ("standard", "semantic") => ("/api/search",      "standard:semantic"),
+        ("standard", "hybrid")   => ("/api/search",      "standard:hybrid"),
+        _                        => ("/api/search",      "standard:semantic"),
     };
 
     let body = json!({
@@ -58,35 +91,24 @@ async fn search(user: &mut GooseUser) -> TransactionResult {
 
     let token = env::var("LUMEN_TOKEN").unwrap_or_default();
 
-    // Build an explicit request so we can attach the auth header.
     let request_builder = user
-        .get_request_builder(&GooseMethod::Post, "/api/search")?
+        .get_request_builder(&GooseMethod::Post, url)?
         .bearer_auth(&token)
         .json(&body);
 
-    // Name the request after the mode so Goose tracks semantic/hybrid stats
-    // separately in the final report.
     let goose_request = GooseRequest::builder()
-        .name(if mode == "hybrid" { "search:hybrid" } else { "search:semantic" })
+        .name(name)
         .set_request_builder(request_builder)
         .build();
 
     let mut response = user.request(goose_request).await?;
 
-    // Mark non-2xx as failures and capture a short body snippet to help
-    // diagnose issues (token expiry, 500s, etc.).
     if let Ok(r) = response.response.as_ref() {
         let status = r.status();
         if !status.is_success() {
-            let snippet = response
-                .response
-                .as_mut()
-                .map(|_| ())
-                .ok();
-            let _ = snippet;
             return user
                 .set_failure(
-                    &format!("search returned HTTP {status}"),
+                    &format!("{name} returned HTTP {status}"),
                     &mut response.request,
                     None,
                     None,
@@ -107,6 +129,13 @@ async fn main() -> Result<(), GooseError> {
              export LUMEN_TOKEN=$(databricks auth token --profile azure-video | jq -r .access_token)"
         );
     }
+
+    eprintln!(
+        "config: turbo_pct={}% (set LUMEN_TURBO_PCT to override), semantic_pct={}%, {} queries",
+        turbo_weight(),
+        SEMANTIC_WEIGHT,
+        QUERIES.len()
+    );
 
     GooseAttack::initialize()?
         .register_scenario(
