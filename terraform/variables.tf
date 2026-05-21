@@ -43,9 +43,9 @@ variable "lakebase_endpoint_id" {
 }
 
 variable "lakebase_min_cu" {
-  description = "Autoscale minimum CU (0.5 = ~1 GB RAM)"
+  description = "Autoscale minimum CU (1 CU ≈ 2 GB RAM on Lakebase Autoscale)"
   type        = number
-  default     = 0.5
+  default     = 1.0
 }
 
 variable "lakebase_max_cu" {
