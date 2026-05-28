@@ -27,3 +27,7 @@ loadtest/requests*.jsonl
 
 # logs
 /tmp/lumen-*.log
+
+# eval harness: cached WANDS data + generated reports
+eval/data/
+eval/results/

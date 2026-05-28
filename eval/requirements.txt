@@ -1,0 +1,6 @@
+# Eval harness deps. Mirrors the backend's Lakebase + Model Serving stack so the
+# harness exercises the same serving path. Install into a venv:
+#   pip install -r eval/requirements.txt
+databricks-sdk>=0.89.0
+psycopg[binary]>=3.1.0
+pgvector>=0.3.6

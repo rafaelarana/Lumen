@@ -14,6 +14,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS databricks_auth;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- trigram fuzzy match (typo fallback)
 
 -- ----------------------------------------------------------------------------
 -- 2. Materialized view with proper vector type + tsvector for FTS
@@ -58,6 +59,11 @@ CREATE INDEX idx_products_mv_class
 CREATE INDEX idx_products_mv_fts
     ON lumen_gold.products_mv USING gin (search_vector);
 
+-- Trigram index on the product name — powers the pg_trgm fuzzy fallback in
+-- search_products_hybrid (the `<%` word-similarity operator) for typo'd queries.
+CREATE INDEX idx_products_mv_name_trgm
+    ON lumen_gold.products_mv USING gin (product_name gin_trgm_ops);
+
 -- ----------------------------------------------------------------------------
 -- 3. Serving functions
 -- ----------------------------------------------------------------------------
@@ -94,6 +100,14 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- 3b. Hybrid search (vector + FTS, RRF combine) -------------------------------
+-- The text branch is field-weighted — the product NAME is boosted over class
+-- and description via setweight + ts_rank_cd — and falls back to a pg_trgm
+-- fuzzy match on the name when strict FTS finds too few hits (typo tolerance).
+-- The weighted tsvector is computed INLINE (over the small candidate set the
+-- GIN-indexed @@ filter selects), so this needs no materialized-view rebuild;
+-- it could be materialized into products_mv later for efficiency.
+-- Signature is unchanged (6 args) so the GRANT and app call site still match;
+-- the fallback knobs are kept as local constants.
 CREATE OR REPLACE FUNCTION search_products_hybrid(
     query_text TEXT,
     query_embedding vector(1024),
@@ -110,50 +124,100 @@ CREATE OR REPLACE FUNCTION search_products_hybrid(
     review_count INT,
     combined_score FLOAT
 ) AS $$
+DECLARE
+    c_min_fts_hits CONSTANT INT   := 3;    -- below this, use the fuzzy fallback
+    c_trgm_thresh  CONSTANT FLOAT := 0.3;  -- pg_trgm word_similarity threshold
+    -- ts_rank_cd weights are ordered {D, C, B, A}: name(A)=1.0 dominates,
+    -- class(B)=0.6, description(C)=0.3.
+    c_weights      CONSTANT float4[] := '{0.1, 0.3, 0.6, 1.0}'::float4[];
+    v_query        tsquery := plainto_tsquery('english', query_text);
+    v_fts_hits     INT;
 BEGIN
-    RETURN QUERY
-    WITH vector_results AS (
-        SELECT
-            p.product_id,
-            ROW_NUMBER() OVER (ORDER BY p.embedding <=> query_embedding) AS rk
-        FROM lumen_gold.products_mv p
-        WHERE (p_class IS NULL OR p.product_class = p_class)
-        ORDER BY p.embedding <=> query_embedding
-        LIMIT p_limit * 3
-    ),
-    text_results AS (
-        SELECT
-            p.product_id,
-            ROW_NUMBER() OVER (
-                ORDER BY ts_rank(p.search_vector, plainto_tsquery('english', query_text)) DESC
-            ) AS rk
-        FROM lumen_gold.products_mv p
-        WHERE p.search_vector @@ plainto_tsquery('english', query_text)
-          AND (p_class IS NULL OR p.product_class = p_class)
-        LIMIT p_limit * 3
-    ),
-    combined AS (
-        SELECT
-            COALESCE(v.product_id, t.product_id) AS product_id,
-            (p_vector_weight * (1.0 / (60 + COALESCE(v.rk, 1000)))) +
-            (p_text_weight   * (1.0 / (60 + COALESCE(t.rk, 1000)))) AS rrf_score
-        FROM vector_results v
-        FULL OUTER JOIN text_results t USING (product_id)
-    )
-    SELECT
-        p.product_id,
-        p.product_name,
-        p.product_class,
-        p.category_hierarchy,
-        p.average_rating,
-        p.review_count,
-        c.rrf_score::float AS combined_score
-    FROM combined c
-    JOIN lumen_gold.products_mv p USING (product_id)
-    ORDER BY c.rrf_score DESC
-    LIMIT p_limit;
+    SELECT count(*) INTO v_fts_hits
+    FROM lumen_gold.products_mv p
+    WHERE p.search_vector @@ v_query
+      AND (p_class IS NULL OR p.product_class = p_class);
+
+    IF v_fts_hits >= c_min_fts_hits THEN
+        -- Strict FTS branch, name-weighted ranking.
+        RETURN QUERY
+        WITH vector_results AS (
+            SELECT p.product_id,
+                   ROW_NUMBER() OVER (ORDER BY p.embedding <=> query_embedding) AS rk
+            FROM lumen_gold.products_mv p
+            WHERE (p_class IS NULL OR p.product_class = p_class)
+            ORDER BY p.embedding <=> query_embedding
+            LIMIT p_limit * 3
+        ),
+        text_results AS (
+            SELECT p.product_id,
+                   ROW_NUMBER() OVER (
+                       ORDER BY ts_rank_cd(
+                           c_weights,
+                           setweight(to_tsvector('english', coalesce(p.product_name, '')),        'A') ||
+                           setweight(to_tsvector('english', coalesce(p.product_class, '')),       'B') ||
+                           setweight(to_tsvector('english', coalesce(p.product_description, '')), 'C'),
+                           v_query
+                       ) DESC
+                   ) AS rk
+            FROM lumen_gold.products_mv p
+            WHERE p.search_vector @@ v_query
+              AND (p_class IS NULL OR p.product_class = p_class)
+            LIMIT p_limit * 3
+        ),
+        combined AS (
+            SELECT COALESCE(v.product_id, t.product_id) AS product_id,
+                   (p_vector_weight * (1.0 / (60 + COALESCE(v.rk, 1000)))) +
+                   (p_text_weight   * (1.0 / (60 + COALESCE(t.rk, 1000)))) AS rrf_score
+            FROM vector_results v
+            FULL OUTER JOIN text_results t USING (product_id)
+        )
+        SELECT p.product_id, p.product_name, p.product_class, p.category_hierarchy,
+               p.average_rating, p.review_count, c.rrf_score::float AS combined_score
+        FROM combined c
+        JOIN lumen_gold.products_mv p USING (product_id)
+        ORDER BY c.rrf_score DESC
+        LIMIT p_limit;
+    ELSE
+        -- Fuzzy fallback: pg_trgm word-similarity on the product name (typos).
+        -- Transaction-local GUC drives the `<%` operator + the trigram index.
+        PERFORM set_config('pg_trgm.word_similarity_threshold', c_trgm_thresh::text, true);
+        RETURN QUERY
+        WITH vector_results AS (
+            SELECT p.product_id,
+                   ROW_NUMBER() OVER (ORDER BY p.embedding <=> query_embedding) AS rk
+            FROM lumen_gold.products_mv p
+            WHERE (p_class IS NULL OR p.product_class = p_class)
+            ORDER BY p.embedding <=> query_embedding
+            LIMIT p_limit * 3
+        ),
+        text_results AS (
+            SELECT p.product_id,
+                   ROW_NUMBER() OVER (
+                       ORDER BY word_similarity(query_text, p.product_name) DESC
+                   ) AS rk
+            FROM lumen_gold.products_mv p
+            WHERE query_text <% p.product_name
+              AND (p_class IS NULL OR p.product_class = p_class)
+            ORDER BY word_similarity(query_text, p.product_name) DESC
+            LIMIT p_limit * 3
+        ),
+        combined AS (
+            SELECT COALESCE(v.product_id, t.product_id) AS product_id,
+                   (p_vector_weight * (1.0 / (60 + COALESCE(v.rk, 1000)))) +
+                   (p_text_weight   * (1.0 / (60 + COALESCE(t.rk, 1000)))) AS rrf_score
+            FROM vector_results v
+            FULL OUTER JOIN text_results t USING (product_id)
+        )
+        SELECT p.product_id, p.product_name, p.product_class, p.category_hierarchy,
+               p.average_rating, p.review_count, c.rrf_score::float AS combined_score
+        FROM combined c
+        JOIN lumen_gold.products_mv p USING (product_id)
+        ORDER BY c.rrf_score DESC
+        LIMIT p_limit;
+    END IF;
 END;
-$$ LANGUAGE plpgsql STABLE;
+$$ LANGUAGE plpgsql VOLATILE;
 
 -- 3c. Similar-product recommender --------------------------------------------
 CREATE OR REPLACE FUNCTION recommend_similar_products(
