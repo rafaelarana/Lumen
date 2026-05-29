@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumen — Hybrid Search</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&family=Kalam:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* Hand-drawn (Excalidraw-style) diagram helpers */
+    .reveal .sketch { width: 100%; height: auto; display: block; margin: 0.2em auto; font-family: 'Kalam', cursive; }
+    .reveal .sketch .t-title { fill: var(--db-navy); font-weight: 700; }
+    .reveal .sketch .t-sub   { fill: var(--db-gray-700); }
+    .reveal .sketch .t-arrow { fill: var(--db-orange); }
+  </style>
+
+  <style>
+    :root {
+      --db-orange: #7c5cff;
+      --db-navy: #1e273d;
+      --db-teal: #6aa80c;
+      --db-coral: #FFAB00;
+      --db-gray-900: #11171C;
+      --db-gray-700: #3A4951;
+      --db-gray-500: #6B7C84;
+      --db-gray-200: #E4E6E8;
+      --db-gray-100: #F2F4F5;
+      --db-bg: #FFFFFF;
+    }
+
+    .reveal {
+      font-family: 'Inter', sans-serif;
+      font-size: 22px;
+      color: var(--db-gray-900);
+    }
+
+    .reveal .slides { text-align: left; }
+
+    .reveal .slides > section,
+    .reveal .slides > section > section {
+      box-sizing: border-box;
+      padding: 56px 96px 72px 96px !important;
+      height: 100%;
+      display: flex !important;
+      flex-direction: column;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .reveal section.center {
+      justify-content: center !important;
+      align-items: center;
+      text-align: center;
+    }
+
+    .reveal section > h2:first-child { margin-top: 0; }
+    .reveal section > *:last-child { margin-bottom: 0; }
+
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 700;
+      color: var(--db-navy);
+      text-transform: none;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.4em 0;
+    }
+
+    .reveal h1 { font-size: 2em; line-height: 1.1; }
+    .reveal h2 {
+      font-size: 1.5em;
+      line-height: 1.15;
+      border-bottom: 3px solid var(--db-orange);
+      padding-bottom: 0.15em;
+      margin-bottom: 0.5em;
+      flex-shrink: 0;
+    }
+    .reveal h3 { font-size: 1.05em; color: var(--db-gray-700); margin-top: 0.3em; }
+
+    .reveal p, .reveal li { line-height: 1.35; }
+    .reveal p { margin: 0.3em 0; }
+    .reveal ul, .reveal ol { display: block; margin: 0 0 0 1.2em; }
+    .reveal li { margin-bottom: 0.25em; }
+    .reveal strong { color: var(--db-orange); font-weight: 700; }
+
+    .reveal blockquote {
+      border-left: 4px solid var(--db-orange);
+      background: var(--db-gray-100);
+      padding: 10px 18px;
+      font-style: normal;
+      font-size: 0.85em;
+      box-shadow: none;
+      width: 100%;
+      margin: 0.5em 0;
+    }
+
+    .reveal code {
+      font-family: 'DM Mono', monospace;
+      background: var(--db-gray-100);
+      color: var(--db-orange);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.82em;
+    }
+
+    .reveal pre { width: 100%; box-shadow: none; border-radius: 8px; font-size: 0.5em; margin: 0.4em 0; }
+    .reveal pre code {
+      background: var(--db-gray-900);
+      color: #F2F4F5;
+      padding: 14px 18px;
+      border-radius: 8px;
+      max-height: 540px;
+      line-height: 1.4;
+      overflow: auto;
+    }
+
+    .reveal table { width: 100%; border-collapse: collapse; margin: 0.4em 0; font-size: 0.65em; }
+    .reveal table th { background: var(--db-navy); color: #fff; text-align: left; padding: 8px 12px; font-weight: 500; border: none; }
+    .reveal table td { padding: 6px 12px; border-bottom: 1px solid var(--db-gray-200); vertical-align: top; }
+    .reveal table tr:nth-child(even) td { background: var(--db-gray-100); }
+    .reveal table a { color: var(--db-orange); text-decoration: none; border-bottom: 1px dotted var(--db-orange); word-break: break-all; }
+    .reveal table a:hover { color: var(--db-navy); border-bottom-color: var(--db-navy); }
+    .reveal blockquote a { color: var(--db-orange); text-decoration: none; border-bottom: 1px dotted var(--db-orange); }
+
+    .reveal .cover { text-align: left; align-items: flex-start !important; justify-content: center !important; }
+    .reveal .cover .eyebrow { color: var(--db-orange); font-weight: 700; letter-spacing: 0.1em; font-size: 0.6em; text-transform: uppercase; margin-bottom: 0.5em; }
+    .reveal .cover h1 { font-size: 2.6em; margin-bottom: 0.2em; }
+    .reveal .cover .subtitle { color: var(--db-gray-700); font-size: 1.1em; margin-bottom: 1em; }
+    .reveal .cover .meta { color: var(--db-gray-500); font-size: 0.7em; line-height: 1.7; }
+    .reveal .cover .goal { margin-top: 1em; padding: 14px 20px; border-left: 4px solid var(--db-orange); background: var(--db-gray-100); font-size: 0.85em; color: var(--db-navy); }
+
+    .reveal .badge { display: inline-block; background: var(--db-orange); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: 500; margin-right: 6px; }
+
+    .reveal .phase-diagram { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0.6em 0; padding: 10px 0; }
+    .reveal .phase-box { flex: 1; background: var(--db-navy); color: #fff; padding: 22px 14px; border-radius: 10px; text-align: center; font-size: 1em; font-weight: 700; letter-spacing: 0.05em; box-shadow: 0 4px 12px rgba(27,49,57,0.15); }
+    .reveal .phase-box.optimize { background: var(--db-orange); }
+    .reveal .phase-box.operate  { background: var(--db-teal); }
+    .reveal .phase-arrow { font-size: 1.5em; color: var(--db-gray-500); font-weight: 700; }
+
+    .reveal .check-list { list-style: none; margin-left: 0; }
+    .reveal .check-list li { padding-left: 1.6em; position: relative; margin-bottom: 0.5em; }
+    .reveal .check-list li::before { content: '✓'; position: absolute; left: 0; color: var(--db-teal); font-weight: 700; font-size: 1.1em; }
+
+    .reveal .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 0.92em; }
+    .reveal .two-col h3 { margin-top: 0; color: var(--db-orange); }
+
+    .reveal .query-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 0.3em; }
+    .reveal .query-pair > div { display: flex; flex-direction: column; min-width: 0; }
+    .reveal .query-pair h3 { margin: 0 0 0.3em 0; font-size: 0.85em; color: var(--db-orange); }
+    .reveal .query-pair pre { font-size: 0.42em; margin: 0; }
+    .reveal .query-pair pre code { padding: 12px 14px; max-height: 420px; }
+    .reveal .query-pair .note { margin-top: 0.4em; font-size: 0.65em; color: var(--db-gray-700); border-left: 3px solid var(--db-orange); padding-left: 10px; line-height: 1.35; }
+
+    .reveal .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 0.4em; }
+    .reveal .kpi { background: var(--db-gray-100); border-left: 4px solid var(--db-orange); padding: 10px 14px; border-radius: 4px; }
+    .reveal .kpi .value { font-weight: 700; color: var(--db-navy); font-size: 1em; }
+    .reveal .kpi .label { font-size: 0.68em; color: var(--db-gray-700); margin-top: 4px; line-height: 1.3; }
+
+    .reveal .callout-red {
+      margin-top: 0.4em;
+      padding: 10px 16px;
+      border: 2px solid var(--db-orange);
+      border-left-width: 6px;
+      border-radius: 6px;
+      background: #FFF5F3;
+      font-size: 0.7em;
+      color: var(--db-navy);
+    }
+    .reveal .callout-red strong { color: var(--db-orange); font-size: 1.05em; }
+
+    .reveal .quote-large {
+      font-size: 1.4em;
+      color: var(--db-navy);
+      font-weight: 500;
+      line-height: 1.3;
+      border-left: 6px solid var(--db-orange);
+      padding: 12px 24px;
+      background: transparent;
+    }
+
+    .reveal .progress { color: var(--db-orange); bottom: 38px; }
+    .reveal .controls { color: var(--db-orange); }
+
+    /* ====== FIXED FOOTER (Lumen branding) ====== */
+    .slide-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 38px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 28px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 11px;
+      color: var(--db-gray-500);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(4px);
+      border-top: 1px solid var(--db-gray-200);
+      z-index: 30;
+      pointer-events: none;
+    }
+    .slide-footer .copyright { letter-spacing: 0.02em; }
+    .slide-footer .brand { display: flex; align-items: center; gap: 8px; margin-right: 70px; }
+    .slide-footer .brand svg { height: 18px; width: auto; display: block; }
+  </style>
+</head>
+
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- COVER SLIDE -->
+      <section class="cover">
+        <div class="eyebrow">Lumen · 2026</div>
+        <h1>Lumen — Hybrid Search on the Lakehouse</h1>
+        <div class="subtitle">Semantic + full-text product search, fused inside Postgres (Lakebase)</div>
+        <div class="meta">
+          <span class="badge">Lakebase / pgvector</span>
+          <span class="badge">BGE-large + RRF</span>
+          <br /><br />
+          Technical overview
+        </div>
+        <div class="goal">
+          <strong>Goal:</strong> understand how Lumen delivers high-quality product search in a single Postgres — and how it compares to dedicated search engines and vector databases.
+        </div>
+        <div class="presenter" style="margin-top: 1.4em; font-size: 0.75em; color: var(--db-gray-500); line-height: 1.6;">
+          <strong style="color: var(--db-navy); font-size: 1.1em;">Rafael Arana</strong> · Senior Solutions Architect<br />
+          May 29, 2026
+        </div>
+      </section>
+
+      <!-- AGENDA -->
+      <section>
+        <h2>Agenda</h2>
+        <ol>
+          <li><strong>Introduction</strong> — what Lumen is</li>
+          <li><strong>Advantages</strong> of Lumen vs traditional search engines</li>
+          <li><strong>General architecture</strong></li>
+          <li><strong>Detailed architecture</strong></li>
+          <li><strong>How search works</strong> — semantic, full-text, hybrid (RRF) + how we measure quality &amp; latency</li>
+          <li><strong>Comparison</strong> — Elasticsearch / OpenSearch &amp; Vector DBs vs Lumen</li>
+          <li><strong>Resources &amp; references</strong></li>
+        </ol>
+      </section>
+
+      <!-- ============ 1 · INTRODUCTION ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">1 · Introduction</h2>
+        <p class="quote-large">"One Postgres for data, vectors and keywords — no separate search cluster to run."</p>
+      </section>
+
+      <section>
+        <h2>What is Lumen?</h2>
+        <ul>
+          <li>An <strong>e-commerce product search</strong> reference app over the <strong>WANDS</strong> catalog (~43K products).</li>
+          <li>Built entirely on Databricks: <strong>Lakehouse</strong> for data + embeddings, <strong>Lakebase</strong> (managed Postgres) for serving, a <strong>Databricks App</strong> (FastAPI + React) for the UI.</li>
+          <li>Two retrieval modes, chosen per request:
+            <ul>
+              <li><strong>Semantic</strong> — vector similarity over BGE-large embeddings.</li>
+              <li><strong>Hybrid</strong> — semantic <strong>+</strong> full-text, fused with Reciprocal Rank Fusion.</li>
+            </ul>
+          </li>
+        </ul>
+        <blockquote>
+          Everything — data, vector index, full-text index, fusion logic — lives in <strong>one database</strong>. Search is a SQL function call.
+        </blockquote>
+      </section>
+
+      <!-- ============ 2 · ADVANTAGES ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">2 · Advantages vs traditional search engines</h2>
+        <p class="quote-large">Fewer moving parts, governed, and good at both meaning and keywords.</p>
+      </section>
+
+      <section>
+        <h2>Why Lumen, vs a dedicated engine</h2>
+        <div class="two-col">
+          <div>
+            <h3>Operational simplicity</h3>
+            <ul>
+              <li><strong>One system</strong>, not two — no separate search cluster.</li>
+              <li><strong>No sync pipeline</strong> / dual source of truth.</li>
+              <li>Transactional consistency with the operational data.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Capability &amp; governance</h3>
+            <ul>
+              <li><strong>Semantic + keyword</strong> together, fused with RRF.</li>
+              <li>Governed by <strong>Unity Catalog</strong>; least-privilege grants.</li>
+              <li>Low latency via in-process caching (p99 ≈ 50 ms).</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout-red">
+          <strong>The trade:</strong> you give up a distributed engine's massive horizontal scale and BM25-grade text ranking — in exchange for one governed system with no synchronization. Great fit when search complements, rather than is, the product.
+        </div>
+      </section>
+
+      <section>
+        <h2>One database, not two</h2>
+        <svg class="sketch" viewBox="0 0 1080 320" style="max-height: 470px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <symbol id="dbx3" viewBox="0 0 64 64">
+              <path fill="#7c5cff" d="M32 6 L39 25 L58 32 L39 39 L32 58 L25 39 L6 32 L25 25 Z"/>
+              
+              
+            </symbol>
+            <filter id="rough3" x="-6%" y="-6%" width="112%" height="112%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="3" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="3.4" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#6B7C84"/>
+            </marker>
+          </defs>
+          <!-- divider -->
+          <line x1="540" y1="40" x2="540" y2="290" stroke="#E4E6E8" stroke-width="2" stroke-dasharray="4 6"/>
+          <!-- LEFT: traditional -->
+          <g filter="url(#rough3)">
+            <g fill="#F2F4F5" stroke="#6B7C84" stroke-width="2.4">
+              <rect x="40"  y="120" width="180" height="90" rx="14"/>
+              <rect x="300" y="120" width="180" height="90" rx="14"/>
+            </g>
+            <line x1="222" y1="165" x2="298" y2="165" stroke="#6B7C84" stroke-width="2.4" stroke-dasharray="7 6" marker-end="url(#ah3)"/>
+          </g>
+          <text class="t-title" x="40" y="90" font-size="24" fill="#6B7C84">Traditional</text>
+          <g text-anchor="middle" fill="#3A4951">
+            <text x="130" y="160" font-size="18" font-weight="700">Operational</text>
+            <text x="130" y="182" font-size="18" font-weight="700">database</text>
+            <text x="390" y="160" font-size="18" font-weight="700">Search</text>
+            <text x="390" y="182" font-size="18" font-weight="700">cluster</text>
+          </g>
+          <text x="260" y="150" font-size="15" fill="#6B7C84" text-anchor="middle">sync / ETL</text>
+          <text x="40" y="248" font-size="17" fill="#6B7C84">2 systems · dual source of truth · sync lag &amp; ops</text>
+          <!-- RIGHT: Lumen -->
+          <g filter="url(#rough3)">
+            <rect x="600" y="120" width="430" height="90" rx="16" fill="#F2F4F5" stroke="#1e273d" stroke-width="2.6"/>
+          </g>
+          <text class="t-title" x="600" y="90" font-size="24">Lumen</text>
+          <use href="#dbx3" x="624" y="142" width="34" height="34"/>
+          <text class="t-title" x="672" y="158" font-size="22">Lakebase (Postgres)</text>
+          <text x="672" y="186" font-size="17" fill="#3A4951">data + vectors + full-text, together</text>
+          <text x="600" y="248" font-size="17" class="t-arrow">1 engine · no sync · Unity Catalog governance</text>
+        </svg>
+        <blockquote style="text-align:center;">No separate cluster, no pipeline to keep in sync — search is a <strong>SQL function</strong> next to the data.</blockquote>
+      </section>
+
+      <!-- ============ 3 · GENERAL ARCHITECTURE ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">3 · General architecture</h2>
+        <p class="quote-large">Lakehouse builds it · Lakebase serves it · the App exposes it.</p>
+      </section>
+
+      <section>
+        <h2>The three planes</h2>
+        <svg class="sketch" viewBox="0 0 1080 360" style="max-height: 520px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <symbol id="dbx1" viewBox="0 0 64 64">
+              <path fill="#7c5cff" d="M32 6 L39 25 L58 32 L39 39 L32 58 L25 39 L6 32 L25 25 Z"/>
+              
+              
+            </symbol>
+            <filter id="rough1" x="-6%" y="-6%" width="112%" height="112%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="7" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="3.6" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <marker id="ah1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#1e273d"/>
+            </marker>
+          </defs>
+          <!-- boxes + arrows (hand-drawn via displacement filter) -->
+          <g filter="url(#rough1)">
+            <g fill="#F2F4F5" stroke="#1e273d" stroke-width="2.5">
+              <rect x="12"  y="70" width="300" height="210" rx="16"/>
+              <rect x="390" y="70" width="300" height="210" rx="16"/>
+              <rect x="768" y="70" width="300" height="210" rx="16"/>
+            </g>
+            <g stroke="#1e273d" stroke-width="2.5" fill="none">
+              <line x1="316" y1="178" x2="384" y2="178" marker-end="url(#ah1)"/>
+              <line x1="694" y1="178" x2="762" y2="178" marker-end="url(#ah1)"/>
+            </g>
+          </g>
+          <use href="#dbx1" x="32"  y="92" width="30" height="30"/>
+          <use href="#dbx1" x="410" y="92" width="30" height="30"/>
+          <use href="#dbx1" x="788" y="92" width="30" height="30"/>
+          <g class="t-title" font-size="27">
+            <text x="72"  y="116">Lakehouse</text>
+            <text x="450" y="116">Lakebase</text>
+            <text x="828" y="116">Databricks App</text>
+          </g>
+          <g class="t-sub" font-size="19">
+            <text x="36"  y="166">bronze · silver · gold</text>
+            <text x="36"  y="196">BGE-large embeddings</text>
+            <text x="36"  y="226">Delta + Unity Catalog</text>
+            <text x="414" y="166">products_mv (pgvector)</text>
+            <text x="414" y="196">HNSW · GIN · trigram</text>
+            <text x="414" y="226">search_products_* fns</text>
+            <text x="792" y="166">FastAPI + React</text>
+            <text x="792" y="196">query embed + caches</text>
+            <text x="792" y="226">on Databricks Apps</text>
+          </g>
+          <g class="t-arrow" font-size="17" text-anchor="middle">
+            <text x="350" y="150">Synced</text>
+            <text x="350" y="168">Table</text>
+            <text x="728" y="160">SQL</text>
+          </g>
+        </svg>
+        <blockquote style="text-align:center;">Lakehouse <strong>builds</strong> the index · Lakebase <strong>serves</strong> it · the App <strong>exposes</strong> it.</blockquote>
+      </section>
+
+      <!-- ============ 4 · DETAILED ARCHITECTURE ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">4 · Detailed architecture</h2>
+        <p class="quote-large">What actually lives in Lakebase.</p>
+      </section>
+
+      <section>
+        <h2>Serving objects in Lakebase (Postgres)</h2>
+        <table>
+          <thead>
+            <tr><th>Object</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>products_mv</code> (materialized view)</td><td>casts the synced <code>jsonb</code> embedding to a real <code>vector(1024)</code>; holds <code>search_vector</code> (tsvector)</td></tr>
+            <tr><td><code>idx_..._embedding</code> — HNSW</td><td>approximate nearest-neighbor vector search (<code>m=16</code>, <code>ef_construction=200</code>, cosine)</td></tr>
+            <tr><td><code>idx_..._fts</code> — GIN</td><td>full-text matching on <code>search_vector</code></td></tr>
+            <tr><td><code>idx_..._name_trgm</code> — GIN (pg_trgm)</td><td>trigram fuzzy match on the product name (typo fallback)</td></tr>
+            <tr><td><code>search_products_semantic / _hybrid</code></td><td>PL/pgSQL serving functions (vector-only / RRF hybrid)</td></tr>
+          </tbody>
+        </table>
+        <blockquote>The App backend adds three cache layers (result, embedding, full path) — Turbo mode — affecting latency only, never ranking.</blockquote>
+      </section>
+
+      <section>
+        <h2>Data flow, end to end</h2>
+        <svg class="sketch" viewBox="0 0 1080 190" style="max-height: 280px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <symbol id="dbx2" viewBox="0 0 64 64">
+              <path fill="#7c5cff" d="M32 6 L39 25 L58 32 L39 39 L32 58 L25 39 L6 32 L25 25 Z"/>
+              
+              
+            </symbol>
+            <filter id="rough2" x="-8%" y="-8%" width="116%" height="116%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="11" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#7c5cff"/>
+            </marker>
+          </defs>
+          <g filter="url(#rough2)">
+            <g fill="#fff" stroke="#1e273d" stroke-width="2.2">
+              <rect x="8"   y="55" width="150" height="85" rx="14"/>
+              <rect x="182" y="55" width="150" height="85" rx="14"/>
+              <rect x="356" y="55" width="150" height="85" rx="14"/>
+              <rect x="530" y="55" width="150" height="85" rx="14"/>
+              <rect x="704" y="55" width="150" height="85" rx="14"/>
+              <rect x="878" y="55" width="150" height="85" rx="14"/>
+            </g>
+            <g stroke="#7c5cff" stroke-width="2.2" fill="none">
+              <line x1="160" y1="97" x2="180" y2="97" marker-end="url(#ah2)"/>
+              <line x1="334" y1="97" x2="354" y2="97" marker-end="url(#ah2)"/>
+              <line x1="508" y1="97" x2="528" y2="97" marker-end="url(#ah2)"/>
+              <line x1="682" y1="97" x2="702" y2="97" marker-end="url(#ah2)"/>
+              <line x1="856" y1="97" x2="876" y2="97" marker-end="url(#ah2)"/>
+            </g>
+          </g>
+          <use href="#dbx2" x="190" y="63" width="17" height="17"/>
+          <use href="#dbx2" x="712" y="63" width="17" height="17"/>
+          <use href="#dbx2" x="886" y="63" width="17" height="17"/>
+          <g text-anchor="middle" font-size="16">
+            <text class="t-title" x="83"  y="92">WANDS</text>
+            <text class="t-sub"   x="83"  y="112" font-size="14">CSVs</text>
+
+            <text class="t-title" x="257" y="100">Lakehouse</text>
+            <text class="t-sub"   x="257" y="120" font-size="14">bronze → gold</text>
+
+            <text class="t-title" x="431" y="100">Embeddings</text>
+            <text class="t-sub"   x="431" y="120" font-size="14">BGE-large 1024-d</text>
+
+            <text class="t-title" x="605" y="100">Synced</text>
+            <text class="t-sub"   x="605" y="120" font-size="14">Table → Postgres</text>
+
+            <text class="t-title" x="779" y="100">Lakebase</text>
+            <text class="t-sub"   x="779" y="120" font-size="14">MV · idx · fns</text>
+
+            <text class="t-title" x="953" y="100">App</text>
+            <text class="t-sub"   x="953" y="120" font-size="14">FastAPI + React</text>
+          </g>
+        </svg>
+        <blockquote style="text-align:center;">Build-time pipeline (left → middle) runs in the Lakehouse; the <strong>Synced Table</strong> hands off to Lakebase, which the App queries at request time.</blockquote>
+      </section>
+
+      <!-- ============ 5 · HOW SEARCH WORKS ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">5 · How search works</h2>
+        <p class="quote-large">Two signals, fused by rank — not by score.</p>
+      </section>
+
+      <section>
+        <h2>Two signals</h2>
+        <div class="two-col">
+          <div>
+            <h3>Semantic (vector)</h3>
+            <ul>
+              <li>Query → 1024-dim BGE-large embedding.</li>
+              <li>HNSW cosine search (<code>&lt;=&gt;</code>).</li>
+              <li>Captures <strong>intent &amp; synonyms</strong>.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Full-text (keyword)</h3>
+            <ul>
+              <li><code>tsvector</code> + GIN, <code>plainto_tsquery</code>.</li>
+              <li><strong>Name-weighted</strong> ranking via <code>setweight</code> + <code>ts_rank_cd</code>.</li>
+              <li><strong>pg_trgm</strong> fuzzy fallback for typos.</li>
+            </ul>
+          </div>
+        </div>
+        <blockquote>Postgres FTS has no true BM25/IDF — <code>setweight</code> + <code>ts_rank_cd</code> approximate it with field boosting + proximity.</blockquote>
+      </section>
+
+      <section>
+        <h2>How RRF fuses the two lists</h2>
+        <svg class="sketch" viewBox="0 0 1080 360" style="max-height: 500px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="rough4" x="-6%" y="-6%" width="112%" height="112%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="2" seed="5" result="n"/>
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="2.8" xChannelSelector="R" yChannelSelector="G"/>
+            </filter>
+            <marker id="ah4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#1e273d"/>
+            </marker>
+          </defs>
+          <!-- column headers -->
+          <text class="t-title" x="40"  y="70" font-size="20">Vector · HNSW</text>
+          <text class="t-title" x="280" y="70" font-size="20">Text · ts_rank_cd</text>
+          <text class="t-title" x="846" y="70" font-size="20" text-anchor="middle">Fused top-k</text>
+          <g filter="url(#rough4)">
+            <!-- vector chips -->
+            <g fill="#EAF2FF" stroke="#1e273d" stroke-width="2.2">
+              <rect x="40"  y="92"  width="190" height="44" rx="10"/>
+              <rect x="40"  y="150" width="190" height="44" rx="10"/>
+              <rect x="40"  y="208" width="190" height="44" rx="10"/>
+            </g>
+            <!-- text chips -->
+            <g fill="#FFF1EE" stroke="#1e273d" stroke-width="2.2">
+              <rect x="280" y="92"  width="190" height="44" rx="10"/>
+              <rect x="280" y="150" width="190" height="44" rx="10"/>
+              <rect x="280" y="208" width="190" height="44" rx="10"/>
+            </g>
+            <!-- RRF node -->
+            <rect x="560" y="120" width="170" height="110" rx="16" fill="#1e273d" stroke="#1e273d" stroke-width="2.2"/>
+            <!-- output chips -->
+            <g fill="#F2F4F5" stroke="#7c5cff" stroke-width="2.4">
+              <rect x="772" y="92"  width="150" height="44" rx="10"/>
+              <rect x="772" y="150" width="150" height="44" rx="10"/>
+              <rect x="772" y="208" width="150" height="44" rx="10"/>
+            </g>
+            <!-- arrows into RRF and out -->
+            <g stroke="#1e273d" stroke-width="2.2" fill="none">
+              <path d="M232,228 C 360,302 470,302 556,198" marker-end="url(#ah4)"/>
+              <line x1="472" y1="172" x2="556" y2="172" marker-end="url(#ah4)"/>
+              <line x1="732" y1="172" x2="768" y2="162" marker-end="url(#ah4)"/>
+            </g>
+          </g>
+          <!-- chip labels -->
+          <g font-size="17" fill="#1e273d">
+            <text x="58" y="120">#1 · prod A</text><text x="58" y="178">#2 · prod B</text><text x="58" y="236">#3 · prod C</text>
+            <text x="298" y="120">#1 · prod B</text><text x="298" y="178">#2 · prod D</text><text x="298" y="236">#3 · prod A</text>
+            <text x="792" y="120" fill="#7c5cff" font-weight="700">prod A</text>
+            <text x="792" y="178" fill="#7c5cff" font-weight="700">prod B</text>
+            <text x="792" y="236" fill="#7c5cff" font-weight="700">prod D</text>
+          </g>
+          <!-- RRF node text -->
+          <g fill="#fff" text-anchor="middle">
+            <text x="645" y="160" font-size="24" font-weight="700">RRF</text>
+            <text x="645" y="188" font-size="15">k=60 · 0.7 / 0.3</text>
+            <text x="645" y="212" font-size="13">Σ w / (k + rank)</text>
+          </g>
+          <text x="540" y="300" font-size="16" fill="#3A4951" text-anchor="middle">Ranks are fused, not raw scores — a product strong in <tspan font-weight="700">either</tspan> list rises; strong in <tspan font-weight="700">both</tspan> wins.</text>
+        </svg>
+      </section>
+
+      <section>
+        <h2>Hybrid fusion — Reciprocal Rank Fusion</h2>
+<pre><code class="language-sql" data-trim>WITH vector_results AS (  -- top 3×k by cosine distance, ROW_NUMBER() = rk
+  ... ORDER BY embedding &lt;=&gt; query_embedding ),
+     text_results AS (    -- top 3×k by name-weighted ts_rank_cd, ROW_NUMBER() = rk
+  ... ORDER BY ts_rank_cd('{0.1,0.3,0.6,1.0}', weighted_tsv, query) DESC )
+SELECT product_id,
+       0.7 * (1.0 / (60 + COALESCE(v.rk, 1000)))    -- vector weight
+     + 0.3 * (1.0 / (60 + COALESCE(t.rk, 1000)))    -- text weight
+       AS rrf_score
+FROM vector_results v FULL OUTER JOIN text_results t USING (product_id)
+ORDER BY rrf_score DESC LIMIT k;</code></pre>
+        <blockquote>Ranks are fused (not raw scores) because cosine distance and <code>ts_rank_cd</code> are not comparable. <code>k=60</code> damping; missing rank → 1000.</blockquote>
+      </section>
+
+      <section>
+        <h2>How we measure performance</h2>
+        <div class="two-col">
+          <div>
+            <h3>Search quality — "are results good?"</h3>
+            <ul>
+              <li>Ground truth: <strong>WANDS graded labels</strong> (Exact/Partial/Irrelevant).</li>
+              <li>Metrics: <strong>NDCG@k</strong>, Recall@k, Precision@k, MRR, MAP.</li>
+              <li>Harness in <code>eval/</code> calls the SQL functions <strong>directly</strong> — no app, no cache → pure ranking.</li>
+              <li>Two query sets: <strong>clean</strong> + <strong>seeded-typo</strong>; reproducible (fixed seed &amp; <code>ef_search</code>).</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Latency — "is it fast?"</h3>
+            <ul>
+              <li>In-app <strong>load generator</strong>: async workers, 4 buckets (standard/turbo × semantic/hybrid).</li>
+              <li>Reports <strong>p50 / p95 / p99</strong>, req/s, error count per bucket.</li>
+              <li>External <strong>Goose</strong> load test adds Apps edge auth + WAN RTT.</li>
+              <li>Measured at <strong>each optimization stage</strong> to attribute the gain.</li>
+            </ul>
+          </div>
+        </div>
+        <blockquote>Quality and speed are measured <strong>separately and repeatably</strong> — so every change is judged on both, not on intuition.</blockquote>
+      </section>
+
+      <section>
+        <h2>Quality, measured against WANDS labels</h2>
+        <p>Graded judgments (Exact/Partial/Irrelevant) → NDCG, Recall, MRR. Hybrid, before vs after FTS tuning:</p>
+        <svg viewBox="0 0 1000 340" style="width:100%;height:auto;max-height:430px;font-family:'DM Sans',sans-serif;" xmlns="http://www.w3.org/2000/svg">
+          <!-- legend -->
+          <g font-size="14" fill="#3A4951">
+            <rect x="150" y="14" width="14" height="14" rx="2" fill="#6B7C84"/><text x="170" y="26">semantic</text>
+            <rect x="300" y="14" width="14" height="14" rx="2" fill="#1e273d"/><text x="320" y="26">hybrid (baseline)</text>
+            <rect x="500" y="14" width="14" height="14" rx="2" fill="#7c5cff"/><text x="520" y="26">hybrid (tuned)</text>
+          </g>
+          <!-- gridlines + y labels (NDCG@10) -->
+          <g stroke="#E4E6E8" stroke-width="1">
+            <line x1="150" y1="50"    x2="900" y2="50"/>
+            <line x1="150" y1="112.5" x2="900" y2="112.5"/>
+            <line x1="150" y1="175"   x2="900" y2="175"/>
+            <line x1="150" y1="237.5" x2="900" y2="237.5"/>
+          </g>
+          <g font-size="12" fill="#6B7C84" text-anchor="end">
+            <text x="140" y="54">0.8</text><text x="140" y="116.5">0.6</text>
+            <text x="140" y="179">0.4</text><text x="140" y="241.5">0.2</text><text x="140" y="304">0.0</text>
+          </g>
+          <line x1="150" y1="300" x2="900" y2="300" stroke="#6B7C84" stroke-width="1.5"/>
+          <text x="64" y="180" font-size="13" fill="#6B7C84" transform="rotate(-90 64 180)" text-anchor="middle">NDCG@10</text>
+          <!-- CLEAN group -->
+          <g>
+            <rect x="180" y="79"  width="56" height="221" fill="#6B7C84"/>
+            <rect x="246" y="77"  width="56" height="223" fill="#1e273d"/>
+            <rect x="312" y="73"  width="56" height="227" fill="#7c5cff"/>
+          </g>
+          <!-- TYPO group -->
+          <g>
+            <rect x="560" y="149" width="56" height="151" fill="#6B7C84"/>
+            <rect x="626" y="149" width="56" height="151" fill="#1e273d"/>
+            <rect x="692" y="139" width="56" height="161" fill="#7c5cff"/>
+          </g>
+          <!-- value labels -->
+          <g font-size="13" fill="#11171C" text-anchor="middle" font-weight="700">
+            <text x="208" y="73">0.706</text><text x="274" y="71">0.714</text><text x="340" y="67">0.725</text>
+            <text x="588" y="143">0.483</text><text x="654" y="143">0.484</text><text x="720" y="133">0.514</text>
+          </g>
+          <!-- group labels -->
+          <g font-size="16" fill="#1e273d" text-anchor="middle" font-weight="700">
+            <text x="274" y="325">Clean queries</text>
+            <text x="654" y="325">Typo queries (pg_trgm)</text>
+          </g>
+        </svg>
+        <blockquote><strong>Benefit:</strong> name-weighting lifts hybrid on clean queries with no regression, and the <code>pg_trgm</code> fallback makes hybrid clearly beat semantic under typos — where before it added nothing.</blockquote>
+      </section>
+
+      <section>
+        <h2>Measuring latency — methodology</h2>
+        <div class="two-col">
+          <div>
+            <h3>In-app benchmark (backend-only)</h3>
+            <ul>
+              <li><code>POST /api/benchmark</code> spins async workers against <strong>localhost</strong> — no edge-auth noise.</li>
+              <li>Independently tracks <strong>4 buckets</strong>: standard/turbo × semantic/hybrid.</li>
+              <li>Reports p50/p75/p95/p99/max, req/s, errors.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Goose load test (end-to-end)</h3>
+            <ul>
+              <li>Rust/Goose from a laptop → includes <strong>Apps edge auth + WAN RTT</strong> (~+60–100 ms).</li>
+              <li>Ramps users/concurrency to check <strong>scaling</strong> &amp; error rate.</li>
+            </ul>
+          </div>
+        </div>
+        <blockquote>Same 100 seed queries in both; backend-only numbers isolate search cost, end-to-end numbers show what users feel.</blockquote>
+      </section>
+
+      <section>
+        <h2>Latency results &amp; benefits</h2>
+        <p>In-app benchmark · 10 workers × 30 s · 50/50 Standard/Turbo · all optimizations on:</p>
+        <table>
+          <thead>
+            <tr><th>Bucket</th><th>p50</th><th>p95</th><th>p99</th><th>req/s</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>standard:semantic</td><td>84 ms</td><td>127 ms</td><td>500 ms</td><td>59.0</td></tr>
+            <tr><td>standard:hybrid</td><td>84 ms</td><td>123 ms</td><td>397 ms</td><td>25.3</td></tr>
+            <tr><td><strong>turbo:semantic</strong></td><td><strong>19 ms</strong></td><td>36 ms</td><td><strong>70 ms</strong></td><td>60.2</td></tr>
+            <tr><td><strong>turbo:hybrid</strong></td><td><strong>18 ms</strong></td><td>35 ms</td><td><strong>50 ms</strong></td><td>24.9</td></tr>
+            <tr><td>Aggregate</td><td>62 ms</td><td>106 ms</td><td>275 ms</td><td><strong>169.4</strong></td></tr>
+          </tbody>
+        </table>
+        <div class="callout-red">
+          <strong>Benefit:</strong> the 3-layer cache + warm pool + <code>ef_search=20</code> cut Turbo <strong>p99 from 622 ms → 50–70 ms (9–12×)</strong> and p50 91 → 18 ms (5×). <strong>0 errors</strong> across 5,208 requests; Goose shows throughput nearly doubling at 2.5× concurrency — it scales cleanly.
+        </div>
+      </section>
+
+      <section>
+        <h2>Standard vs Turbo — p99 latency</h2>
+        <svg viewBox="0 0 1000 300" style="width:100%;height:auto;max-height:440px;font-family:'DM Sans',sans-serif;" xmlns="http://www.w3.org/2000/svg">
+          <text x="260" y="28" font-size="15" fill="#6B7C84">p99 latency (ms) — lower is better</text>
+          <!-- baseline axis -->
+          <line x1="260" y1="44" x2="260" y2="272" stroke="#E4E6E8" stroke-width="1.5"/>
+          <!-- rows: label + bar + value -->
+          <g font-size="16" fill="#1e273d" text-anchor="end">
+            <text x="250" y="71">standard:semantic</text>
+            <text x="250" y="131">standard:hybrid</text>
+            <text x="250" y="191">turbo:semantic</text>
+            <text x="250" y="251">turbo:hybrid</text>
+          </g>
+          <g>
+            <rect x="260" y="48"  width="600" height="40" rx="6" fill="#1e273d"/>
+            <rect x="260" y="108" width="476" height="40" rx="6" fill="#3A4951"/>
+            <rect x="260" y="168" width="84"  height="40" rx="6" fill="#6aa80c"/>
+            <rect x="260" y="228" width="60"  height="40" rx="6" fill="#7c5cff"/>
+          </g>
+          <g font-size="15" fill="#11171C" font-weight="700">
+            <text x="870" y="73">500 ms</text>
+            <text x="746" y="133">397 ms</text>
+            <text x="354" y="193" fill="#6aa80c">70 ms</text>
+            <text x="330" y="253" fill="#7c5cff">50 ms</text>
+          </g>
+          <!-- callout on the turbo cluster -->
+          <text x="470" y="222" font-size="17" fill="#7c5cff" font-weight="700">◄ Turbo: 9–12× lower</text>
+        </svg>
+        <blockquote style="text-align:center;">The cache + warm pool collapse tail latency: Turbo's p99 (50–70 ms) is mostly network &amp; serialization, not search.</blockquote>
+      </section>
+
+      <!-- ============ 6 · COMPARISON ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">6 · Comparison</h2>
+        <p class="quote-large">Elasticsearch / OpenSearch &amp; Vector DBs vs Lumen.</p>
+      </section>
+
+      <section>
+        <h2>Lumen vs Elasticsearch / OpenSearch</h2>
+        <table>
+          <thead>
+            <tr><th>Dimension</th><th>Elasticsearch / OpenSearch</th><th>Lumen (Postgres FTS + pgvector)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Text ranking</td><td><strong>BM25</strong> (TF-IDF + length norm)</td><td><code>ts_rank_cd</code> + field weighting (no true IDF)</td></tr>
+            <tr><td>Text features</td><td>fuzzy, synonyms, n-grams, highlighting, facets</td><td>stemming + <code>pg_trgm</code> fuzzy fallback</td></tr>
+            <tr><td>Scale</td><td>distributed, sharded, billions of docs</td><td>single-node (+ read replicas), 10⁴–10⁷ docs</td></tr>
+            <tr><td>Hybrid + vectors</td><td>native (kNN + RRF retrievers, 8.x)</td><td>RRF written in SQL; pgvector HNSW</td></tr>
+            <tr><td>Operations</td><td>separate cluster + sync pipeline</td><td>one Postgres; no sync; UC-governed</td></tr>
+          </tbody>
+        </table>
+        <blockquote>Same idea (inverted index + ranking + vectors); ES is the dedicated, distributed engine with better text ranking, Lumen folds it into the database.</blockquote>
+      </section>
+
+      <section>
+        <h2>Dedicated Vector DB vs Lumen</h2>
+        <table>
+          <thead>
+            <tr><th>Dimension</th><th>Dedicated Vector DB (Pinecone, Weaviate, Milvus…)</th><th>Lumen (pgvector in Lakebase)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Vector search</td><td>purpose-built ANN, very large scale</td><td>HNSW via pgvector, ample for this corpus</td></tr>
+            <tr><td>Keyword / hybrid</td><td>often add-on or external</td><td>full-text + RRF in the same engine</td></tr>
+            <tr><td>Joins &amp; filters</td><td>limited; metadata filters only</td><td>full SQL: joins, facets, transactional rows</td></tr>
+            <tr><td>Data movement</td><td>separate store to populate &amp; sync</td><td>none — vectors sit next to the data</td></tr>
+            <tr><td>Governance</td><td>separate IAM</td><td>Unity Catalog + Postgres roles</td></tr>
+          </tbody>
+        </table>
+        <div class="callout-red">
+          <strong>When a dedicated engine wins:</strong> billions of vectors / very high QPS, or search-grade text features (BM25, synonyms, typo-tolerance everywhere) are the core product. Otherwise, keeping it in the database removes a whole system.
+        </div>
+      </section>
+
+      <!-- ============ 7 · RESOURCES ============ -->
+      <section class="center">
+        <h2 style="border-bottom: none;">7 · Resources &amp; references</h2>
+        <p class="quote-large">Where to dig deeper.</p>
+      </section>
+
+      <section>
+        <h2>Resources &amp; references</h2>
+        <table>
+          <thead>
+            <tr><th>Topic</th><th>Link</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Lumen — architecture</td><td><code>doc/Architecture.md</code></td></tr>
+            <tr><td>Lumen — search deep-dive</td><td><code>doc/Search.md</code></td></tr>
+            <tr><td>Lumen — eval harness</td><td><code>eval/README.md</code></td></tr>
+            <tr><td>WANDS dataset</td><td><a href="https://github.com/wayfair/WANDS">github.com/wayfair/WANDS</a></td></tr>
+            <tr><td>pgvector</td><td><a href="https://github.com/pgvector/pgvector">github.com/pgvector/pgvector</a></td></tr>
+            <tr><td>PostgreSQL full-text search</td><td><a href="https://www.postgresql.org/docs/current/textsearch.html">postgresql.org/docs/current/textsearch.html</a></td></tr>
+            <tr><td>pg_trgm</td><td><a href="https://www.postgresql.org/docs/current/pgtrgm.html">postgresql.org/docs/current/pgtrgm.html</a></td></tr>
+            <tr><td>Reciprocal Rank Fusion (Cormack et&nbsp;al., 2009)</td><td><a href="https://plg.uwaterloo.ca/~gvcormack/cormacksigir09-rrf.pdf">cormacksigir09-rrf.pdf</a></td></tr>
+            <tr><td>BGE-large embeddings</td><td><a href="https://huggingface.co/BAAI/bge-large-en-v1.5">huggingface.co/BAAI/bge-large-en-v1.5</a></td></tr>
+            <tr><td>Databricks Lakebase</td><td><a href="https://www.databricks.com/product/lakebase">databricks.com/product/lakebase</a></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- CLOSING SLIDE -->
+      <section class="center">
+        <h1 style="text-align: center;">Thank you</h1>
+        <p style="text-align: center; margin-top: 1.5em;">
+          <strong style="font-size: 1.2em;">Rafael Arana</strong><br />
+          <span style="color: var(--db-gray-700);">Senior Solutions Architect</span><br />
+          <span style="color: var(--db-gray-500); font-size: 0.85em;">rafael.arana@databricks.com</span>
+        </p>
+        <p style="text-align: center; margin-top: 1.5em; color: var(--db-gray-500); font-style: italic;">Questions welcome.</p>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <div class="copyright">© 2026 Lumen · Hybrid Search</div>
+    <div class="brand">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="Lumen">
+        <path fill="#7c5cff" d="M32 6 L39 25 L58 32 L39 39 L32 58 L25 39 L6 32 L25 25 Z"/>
+        
+        
+      </svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: 'c/t',
+      controls: true,
+      progress: true,
+      center: false,
+      transition: 'slide',
+      width: 1280,
+      height: 760,
+      margin: 0,
+      minScale: 0.2,
+      maxScale: 1.4,
+      pdfSeparateFragments: false,
+      plugins: [ RevealHighlight, RevealNotes ]
+    });
+  </script>
+</body>
+</html>
